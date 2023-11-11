@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import requests
 from dotenv import load_dotenv
+from datetime import datetime
 import os
 
 load_dotenv()
@@ -25,7 +26,9 @@ def geocoding(address):
 
 	return (lat,lng)
 
-filename = "data_010423.csv"
+formatted_date = datetime.now().strftime('%d%m%y')
+
+filename = "data_" + "221023" + ".csv"
 
 df = pd.read_csv('../scraping/data/' + filename)
 
