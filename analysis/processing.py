@@ -1,54 +1,62 @@
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
 import requests
-from dotenv import load_dotenv
-from datetime import datetime
 import os
+from datetime import datetime
+from sqlalchemy import create_engine
 
+from dotenv import load_dotenv
+
+# Load environment variables
 load_dotenv()
+# Database connection
+db_uri = os.getenv(
+    "DATABASE_URL"
+)  # Example: 'postgresql://username:password@localhost:5432/mydatabase'
+engine = create_engine(db_uri)
+
 
 def geocoding(address):
-	api_key = os.getenv('GMAPS_API_KEY') 
-    	# Set the API endpoint and parameters
-	url = 'https://maps.googleapis.com/maps/api/geocode/json'
-	params = {'address': address, 'key': api_key}
-
-	# Make a GET request to the API endpoint
-	response = requests.get(url, params=params)
-
-	# Parse the JSON response
-	data = response.json()
-
-	# Extract the latitude and longitude coordinates
-	lat = data['results'][0]['geometry']['location']['lat']
-	lng = data['results'][0]['geometry']['location']['lng']
-
-	return (lat,lng)
-
-formatted_date = datetime.now().strftime('%d%m%y')
-
-filename = "data_" + "221023" + ".csv"
-
-df = pd.read_csv('../scraping/data/' + filename)
-
-df = df[df['PRICE'] != 'auf Anfrage']
-
-print(df.head(5))
+    api_key = os.getenv("GMAPS_API_KEY")
+    url = "https://maps.googleapis.com/maps/api/geocode/json"
+    params = {"address": address, "key": api_key}
+    response = requests.get(url, params=params)
+    data = response.json()
+    print(data)
+    lat = data["results"][0]["geometry"]["location"]["lat"]
+    lng = data["results"][0]["geometry"]["location"]["lng"]
+    return (lat, lng)
 
 
-# Remove the € symbol and the dot from the price column
-df['PRICE'] = df['PRICE'].str.replace(' €', '').str.replace('.', '').astype(int)
+filenames = ["data_281023.csv"]
+for filename in filenames:
+    # Load and preprocess the dataframe
+    formatted_date = datetime.now().strftime("%d%m%y")
+    filename = "data_281023.csv"
+    df = pd.read_csv("../scraping/data/" + filename)
+    df = df[df["PRICE"] != "auf Anfrage"]
 
-# Remove the m² symbol from the size column
-df['LIVING_AREA'] = df['LIVING_AREA'].str.replace(' m²', '').str.replace(',', '.').astype(float)
+    df["PRICE"] = (
+        df["PRICE"]
+        .str.replace(" €", "")
+        .str.split(",")
+        .str[0]
+        .str.replace(".", "")
+        .astype(int)
+    )
+    df["LIVING_AREA"] = (
+        df["LIVING_AREA"]
+        .str.replace(" m²", "")
+        .str.replace(".", "")
+        .str.replace(",", ".")
+        .astype(float)
+    )
 
-print(df.head(5))
+    df = df.head(100)
 
-# Create a new column for the latitude and longitude coordinates
-df['COORD'] = df['LOCATION'].apply(geocoding)
+    df[["LATITUDE", "LONGITUDE"]] = df["LOCATION"].apply(geocoding).apply(pd.Series)
 
-# Save the dataframe to a CSV file
-df.to_csv('./data/' + filename, index=False)
-
-print(df)
+    # Append to PostgreSQL table
+    df["date"] = datetime.strptime(
+        filename.split("_")[1].split(".")[0], "%d%m%y"
+    ).date()
+    df.to_sql("data_geocoded", engine, if_exists="append", index=False)
